@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nio_market
+      POSTGRES_USER: ${POSTGRES_USER:-nio_market}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - nio_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nio_market} -d nio_market"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+      META_GRAPH_API_VERSION: ${META_GRAPH_API_VERSION}
+      PAYMENT_PROOF_DIR: /data/payment-proofs
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM}
+      STORE_PURCHASE_PRICE_DZD: ${STORE_PURCHASE_PRICE_DZD}
+      NEXT_PUBLIC_STORE_PURCHASE_PRICE_DZD: ${NEXT_PUBLIC_STORE_PURCHASE_PRICE_DZD}
+    ports:
+      - "3000:3000"
+    volumes:
+      - nio_payment_proofs:/data/payment-proofs
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  nio_postgres:
+  nio_payment_proofs:

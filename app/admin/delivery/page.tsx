@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation'; import {currentUser} from '@/lib/auth'; import {db} from '@/lib/db'; import DeliveryClient from './DeliveryClient';
+export default async function DeliveryPage(){const user=await currentUser();if(!user?.merchant)redirect('/login');const store=await db.store.findUnique({where:{merchantId:user.merchant.id},select:{id:true,name:true}});return <DeliveryClient stores={store?[store]:[]}/>}

@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MERCHANT
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum StoreStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum PurchaseStatus {
+  PENDING_PAYMENT
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id                String            @id @default(cuid())
+  email             String            @unique
+  name              String?
+  passwordHash      String
+  sessionVersion    Int               @default(0)
+  role              UserRole          @default(MERCHANT)
+  merchant          Merchant?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  auditLogs         AuditLog[]
+  purchaseRequests  PaymentPurchase[]
+  reviewedPurchases PaymentPurchase[] @relation("ReviewedPurchases")
+}
+
+model Merchant {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  store     Store?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Store {
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  domain              String?              @unique
+  logoUrl             String?
+  primaryGreen        String               @default("#1ACD60")
+  primaryBlue         String               @default("#1C4398")
+  pixelId             String?
+  metaAccessToken     String?
+  status              StoreStatus          @default(ACTIVE)
+  subscriptionPlan    SubscriptionPlan     @default(STARTER)
+  subscriptionStatus  SubscriptionStatus   @default(TRIAL)
+  trialEndsAt         DateTime?
+  currency            String               @default("DZD")
+  merchantId          String               @unique
+  merchant            Merchant             @relation(fields: [merchantId], references: [id])
+  products            Product[]
+  orders              Order[]
+  customers           Customer[]
+  deliveryRates       DeliveryRate[]
+  deliveryIntegration DeliveryIntegration?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  purchase            PaymentPurchase?
+}
+
+model PaymentPurchase {
+  id                String         @id @default(cuid())
+  fullName          String
+  email             String
+  storeName         String
+  slug              String
+  status            PurchaseStatus @default(PENDING_PAYMENT)
+  proofPath         String?
+  proofOriginalName String?
+  proofMimeType     String?
+  proofSize         Int?
+  purchasePriceDzd  Int?
+  reviewNote        String?
+  userId            String?        @unique
+  user              User?          @relation(fields: [userId], references: [id])
+  storeId           String?        @unique
+  store             Store?         @relation(fields: [storeId], references: [id])
+  reviewedById      String?
+  reviewedBy        User?          @relation("ReviewedPurchases", fields: [reviewedById], references: [id])
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([email])
+  @@index([status, createdAt])
+}
+
+model DeliveryIntegration {
+  id                   String   @id @default(cuid())
+  storeId              String   @unique
+  store                Store    @relation(fields: [storeId], references: [id])
+  providerName         String
+  baseUrl              String?
+  apiKeyEncrypted      String?
+  apiSecretEncrypted   String?
+  extraConfigEncrypted String?
+  enabled              Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model DeliveryRate {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id])
+  wilayaCode  String
+  wilayaName  String
+  homeFee     Int      @default(0)
+  stopDeskFee Int      @default(0)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([storeId, wilayaCode])
+}
+
+model Product {
+  id             String      @id @default(cuid())
+  storeId        String
+  store          Store       @relation(fields: [storeId], references: [id])
+  name           String
+  slug           String
+  price          Int
+  compareAtPrice Int?
+  description    String?
+  imageUrl       String?
+  stock          Int         @default(0)
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  orderItems     OrderItem[]
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  orderNumber      String      @unique
+  idempotencyKey   String?
+  storeId          String
+  store            Store       @relation(fields: [storeId], references: [id])
+  customerId       String?
+  customer         Customer?   @relation(fields: [customerId], references: [id])
+  customerName     String
+  customerPhone    String
+  wilayaCode       String?
+  wilaya           String
+  commune          String
+  address          String?
+  status           OrderStatus @default(NEW)
+  total            Int
+  deliveryFee      Int         @default(0)
+  trackingNumber   String?
+  deliveryProvider String?
+  deliveryLabelUrl String?
+  deliveryType     String?
+  items            OrderItem[]
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([storeId, idempotencyKey])
+  @@index([storeId, createdAt])
+  @@index([storeId, status])
+  @@index([customerId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id])
+  name      String
+  phone     String
+  wilaya    String?
+  commune   String?
+  address   String?
+  notes     String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, phone])
+  @@index([storeId, createdAt])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Int
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}

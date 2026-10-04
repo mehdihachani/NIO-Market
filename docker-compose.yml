@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nio_market
+      POSTGRES_USER: ${POSTGRES_USER:-nio_market}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - nio_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nio_market} -d nio_market"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  nio_postgres:
